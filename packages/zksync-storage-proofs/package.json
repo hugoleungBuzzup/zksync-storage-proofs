@@ -6,12 +6,14 @@
   "devDependencies": {
     "@types/node": "^20.11.16",
     "bun-types": "latest",
+    "dotenv": "^16.6.1",
     "nodemon": "^3.0.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   },
   "dependencies": {
     "ethers": "6.10.0",
+    "viem": "^2.20.0",
     "zksync-ethers": "6.1.0"
   },
   "scripts": {
@@ -19,7 +21,12 @@
     "build-esm": "tsc --project tsconfig.esm.json",
     "build-commonjs": "tsc --project tsconfig.cjs.json",
     "build": "npm run build-esm && npm run build-commonjs",
-    "clean": "rm -rf build"
+    "clean": "rm -rf build",
+    "proof:readme": "npm run build && node scripts/readme-proof-sepolia.cjs",
+    "proof:balance": "npm run build && node scripts/balance-proof-sepolia.cjs",
+    "proof:clave-encode": "npm run build && node scripts/clave-ccip-bridge.cjs",
+    "check:multichain-storage": "ts-node --transpile-only -P tsconfig.scripts.json test/multichain-registry-storage-check.ts",
+    "set-record:multichain": "ts-node --transpile-only -P tsconfig.scripts.json test/multichainNameRegistry_setRecord.ts"
   },
   "version": "1.0.3"
 }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.20;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {StorageProof, StorageProofVerifier} from "./StorageProofVerifier.sol";
+import {Ownable} from "./Ownable.sol";
+import {StorageProof, StorageProofVerifier} from "../StorageProofVerifier.sol";
 
 interface IOffchainResolver {
     function resolve(
@@ -24,18 +24,32 @@ interface IClaveResolver is IExtendedResolver {
     function supportsInterface(bytes4 interfaceID) external pure returns (bool);
 }
 
+/// @title ClaveResolver
+/// @notice ENSIP-10 resolver using EIP-3668 (CCIP Read) + zkSync L2 storage proofs.
+/// @dev Wildcard names must be DNS-encoded with exactly three labels: sub.dom.eth (e.g. hahah222.abc123.eth).
 contract ClaveResolver is IClaveResolver, Ownable {
-    error UnsupportedChain(uint256 coinType);
     error InvalidDnsDomain();
 
-    // Interface IDs
     bytes4 private constant INTERFACE_META_ID = 0x01ffc9a7; // EIP-165
     bytes4 private constant EXTENDED_INTERFACE_ID = 0x9061b923; // ENSIP-10
-    bytes4 constant ADDR_SELECTOR = 0x3b3b57de; // addr(bytes32)
-    bytes4 constant ADDR_MULTICHAIN_SELECTOR = 0xf1cb7e06; // addr(bytes32,uint)
-    uint256 constant ZKSYNC_MAINNET_COIN_TYPE = 2147483972; // (0x80000000 | 0x144) >>> 0 as per ENSIP11
+    bytes4 public constant ADDR_SELECTOR = 0x3b3b57de; // addr(bytes32)
+    bytes4 public constant ADDR_MULTICHAIN_SELECTOR = 0xf1cb7e06; // addr(bytes32,uint256)
 
-    /// @notice Thrown when an offchain lookup will be performed
+    /// @notice SLIP-44 Ethereum mainnet
+    uint256 public constant COIN_SLIP44_ETH = 60;
+    /// @notice SLIP-44 Solana
+    uint256 public constant COIN_SLIP44_SOL = 501;
+    /// @notice SLIP-44 Binance Chain / BNB
+    uint256 public constant COIN_SLIP44_BNB = 714;
+    /// @notice zkSync Era (ENSIP-11 style)
+    uint256 public constant ZKSYNC_MAINNET_COIN_TYPE = 2147483972;
+    /// @notice Base (EIP-155 chainId 8453, ENSIP-11)
+    uint256 public constant COIN_TYPE_BASE =
+        uint256(uint32(0x80000000 | 8453));
+    /// @notice Arbitrum ARB1 (path 0x80002329, coin type component 9001, ENSIP-11)
+    uint256 public constant COIN_TYPE_ARBITRUM =
+        uint256(uint32(0x80002329));
+
     error OffchainLookup(
         address sender,
         string[] urls,
@@ -45,37 +59,29 @@ contract ClaveResolver is IClaveResolver, Ownable {
     );
     error UnsupportedCoinType(uint256 coinType);
     error UnsupportedSelector(bytes4 selector);
-    error InvalidStorageProof();
-    error InvalidSignature();
 
-    /// @notice Storage proof verifier contract
     StorageProofVerifier public storageProofVerifier;
-
-    /// @notice URL of the resolver
     string public url;
-
-    /// @notice Address of the registry contract on L2
     address public registry;
-
-    /// @notice Storage slot for the mapping index, specific to Registry contract
+    /// @notice Outer mapping slot for L2 registry (0 for MultichainNameRegistry.records)
     uint256 public mappingSlot = 2;
-
-    /// @notice Address of the domain owner
     address public domainOwner;
-
-    /// @notice If true, proofs will be validated to make sure they are correct
     bool public validateProofs = true;
+    /// @notice If true, use nested mapping layout (MultichainNameRegistry). If false, legacy single slot per label.
+    bool public multichainLayout;
 
     constructor(
         string memory _url,
         address _domainOwner,
         address _registry,
-        StorageProofVerifier _storageProofVerifier
+        StorageProofVerifier _storageProofVerifier,
+        bool _multichainLayout
     ) Ownable(msg.sender) {
         url = _url;
         domainOwner = _domainOwner;
         registry = _registry;
         storageProofVerifier = _storageProofVerifier;
+        multichainLayout = _multichainLayout;
     }
 
     function setValidate(bool _validate) external onlyOwner {
@@ -100,25 +106,17 @@ contract ClaveResolver is IClaveResolver, Ownable {
         storageProofVerifier = _storageProofVerifier;
     }
 
-    /// @notice Extract namehash from calldata
+    function setMultichainLayout(bool _multichainLayout) external onlyOwner {
+        multichainLayout = _multichainLayout;
+    }
+
     function extractNamehash(
         bytes calldata data
     ) public pure returns (bytes32 namehash) {
-        // Cast last 32 bytes of data to bytes32
         namehash = bytes32(data[data.length - 32:]);
     }
 
-    /// @notice Parses DNS encoded domain name
-    /// @param name DNS encoded domain name
-    /// @return sub Subdomain
-    /// @return dom Domain
-    /// @return top Top level domain
-    /// @dev e.g example.clave.eth is encoded as b"\x07example\x05clave\x03eth"
-    ///      sub = "example"
-    ///      dom = "clave"
-    ///      top = "eth"
-    /// @dev It's possible that the name is just a top level domain, in which case sub and dom will be empty
-    /// @dev It's possible that the name is just a domain, in which case sub will be empty
+    /// @notice Parses DNS-encoded name into three labels: sub.dom.eth
     function parseDnsDomain(
         bytes calldata name
     )
@@ -131,8 +129,6 @@ contract ClaveResolver is IClaveResolver, Ownable {
         uint8 firstlen = uint8(name[0]);
         string memory first = string(name[1:1 + firstlen]);
 
-        // If there's only one segment, it's a top level domain
-        // {top_length}.{top}.{0x00}
         if (length == firstlen + 2) return ("", "", first);
 
         uint8 secondlen = uint8(name[firstlen + 1]);
@@ -140,8 +136,6 @@ contract ClaveResolver is IClaveResolver, Ownable {
             name[firstlen + 2:firstlen + 2 + secondlen]
         );
 
-        // If there's only two segments, it's a domain
-        // {dom_length}.{dom}.{top_length}.{top}.{0x00}
         if (length == firstlen + secondlen + 3) return ("", first, second);
 
         uint8 thirdlen = uint8(name[firstlen + secondlen + 2]);
@@ -152,20 +146,15 @@ contract ClaveResolver is IClaveResolver, Ownable {
         return (first, second, third);
     }
 
-    /// @notice Calculates storage slot of the key in the L2 registry
-    /// @dev Names are stored in the L2 registry, in a mapping with slot `mappingSlot`
     function getDomainSlot(bytes32 _key) public view returns (bytes32) {
         return keccak256(abi.encode(_key, mappingSlot));
     }
 
-    /// @notice Helper function to convert a string to lowercase
     function toLower(string memory str) private pure returns (string memory) {
         bytes memory bStr = bytes(str);
         bytes memory bLower = new bytes(bStr.length);
-        for (uint i = 0; i < bStr.length; i++) {
-            // Uppercase character...
+        for (uint256 i = 0; i < bStr.length; i++) {
             if ((uint8(bStr[i]) >= 65) && (uint8(bStr[i]) <= 90)) {
-                // So we add 32 to make it lowercase
                 bLower[i] = bytes1(uint8(bStr[i]) + 32);
             } else {
                 bLower[i] = bStr[i];
@@ -174,17 +163,49 @@ contract ClaveResolver is IClaveResolver, Ownable {
         return string(bLower);
     }
 
-    /// @notice Calculates storage slot of the key in the L2 registry
-    /// @dev Names are stored in the L2 registry, in a mapping with slot `mappingSlot`
+    /// @notice Legacy layout: one value per label (demo Registry-style).
     function getDomainSlot(string memory _key) public view returns (bytes32) {
         string memory domain = toLower(_key);
         uint256 tokenId = uint256(keccak256(abi.encodePacked(domain)));
         return keccak256(abi.encode(tokenId, mappingSlot));
     }
 
-    /// @notice Resolves a name to a value
-    /// @param _name The name to resolve, DNS encoded
-    /// @param _data The ABI encoded data for the underlying resolution function (Eg, addr(bytes32), text(bytes32,string), etc).
+    /// @notice MultichainNameRegistry layout: mapping(tokenId => mapping(coinType => bytes32)) at `mappingSlot`.
+    function getMultichainDomainSlot(
+        string memory sub,
+        uint256 coinType
+    ) public view returns (uint256) {
+        string memory domain = toLower(sub);
+        uint256 tokenId = uint256(keccak256(abi.encodePacked(domain)));
+        bytes32 inner = keccak256(abi.encode(tokenId, mappingSlot));
+        return uint256(keccak256(abi.encode(coinType, inner)));
+    }
+
+    function _isSupportedCoinType(uint256 coinType) internal pure returns (bool) {
+        if (
+            coinType == COIN_SLIP44_ETH ||
+            coinType == COIN_SLIP44_SOL ||
+            coinType == COIN_SLIP44_BNB ||
+            coinType == ZKSYNC_MAINNET_COIN_TYPE ||
+            coinType == COIN_TYPE_BASE ||
+            coinType == COIN_TYPE_ARBITRUM
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    /// @notice ERC-2304 binary: Solana 32 bytes; EVM chains 20-byte address in word.
+    function _formatResolvedAddr(
+        bytes32 word,
+        uint256 coinType
+    ) internal pure returns (bytes memory) {
+        if (coinType == COIN_SLIP44_SOL) {
+            return abi.encodePacked(word);
+        }
+        return abi.encodePacked(address(uint160(uint256(word))));
+    }
+
     function resolve(
         bytes calldata _name,
         bytes calldata _data
@@ -195,7 +216,6 @@ contract ClaveResolver is IClaveResolver, Ownable {
             _data
         );
 
-        // Fill URLs
         string[] memory urls = new string[](1);
         urls[0] = url;
 
@@ -205,48 +225,44 @@ contract ClaveResolver is IClaveResolver, Ownable {
             string memory top
         ) = parseDnsDomain(_name);
 
-        // If there's no domain or top level domain, throw
         if (bytes(dom).length == 0 || bytes(top).length == 0) {
             revert InvalidDnsDomain();
         }
 
         if (bytes(sub).length == 0) {
-            // If there's no subdomain, return the domain owner
             return abi.encodePacked(domainOwner);
         }
 
-        bytes32 registrySlot = getDomainSlot(sub);
-
         bytes4 functionSelector = bytes4(_data[:4]);
+        uint256 queryCoinType;
         if (functionSelector == ADDR_SELECTOR) {
-            revert OffchainLookup(
-                address(this),
-                urls,
-                callData,
-                ClaveResolver.resolveWithProof.selector,
-                abi.encode(registry, registrySlot)
-            );
+            queryCoinType = COIN_SLIP44_ETH;
         } else if (functionSelector == ADDR_MULTICHAIN_SELECTOR) {
-            (, uint coinType) = abi.decode(_data[4:], (bytes32, uint));
-            if (coinType != ZKSYNC_MAINNET_COIN_TYPE) {
-                // TODO: Handle other chains when this is supported
-                revert UnsupportedCoinType(coinType);
+            (, queryCoinType) = abi.decode(_data[4:], (bytes32, uint256));
+            if (multichainLayout) {
+                if (!_isSupportedCoinType(queryCoinType)) {
+                    revert UnsupportedCoinType(queryCoinType);
+                }
+            } else if (queryCoinType != ZKSYNC_MAINNET_COIN_TYPE) {
+                revert UnsupportedCoinType(queryCoinType);
             }
-            revert OffchainLookup(
-                address(this),
-                urls,
-                callData,
-                ClaveResolver.resolveWithProof.selector,
-                abi.encode(registry, registrySlot)
-            );
         } else {
             revert UnsupportedSelector(functionSelector);
         }
+
+        uint256 registryKey = multichainLayout
+            ? getMultichainDomainSlot(sub, queryCoinType)
+            : uint256(getDomainSlot(sub));
+
+        revert OffchainLookup(
+            address(this),
+            urls,
+            callData,
+            ClaveResolver.resolveWithProof.selector,
+            abi.encode(registry, registryKey, queryCoinType)
+        );
     }
 
-    /// @notice Callback used by CCIP read compatible clients to verify and parse the response.
-    /// @param _response ABI encoded StorageProof struct
-    /// @return ABI encoded value of the storage key
     function resolveWithProof(
         bytes memory _response,
         bytes memory _extraData
@@ -255,29 +271,22 @@ contract ClaveResolver is IClaveResolver, Ownable {
             _response,
             (StorageProof, bytes32)
         );
-        (address account, uint256 key) = abi.decode(
+        (address account, uint256 key, uint256 coinType) = abi.decode(
             _extraData,
-            (address, uint256)
+            (address, uint256, uint256)
         );
 
         if (validateProofs) {
-            // Override account and key of the proof to make sure it is correct address and key
             proof.account = account;
             proof.key = key;
         }
 
         bool verified = storageProofVerifier.verify(proof);
 
-        // If there's an address for the name, this should be an address
-        // But example implementation is returning bytes and we're doing the same
         if (verified && proof.value != bytes32(0)) {
-            return abi.encodePacked(proof.value);
-        } else {
-            // After username is set on L2, there'll be a time period where
-            // the username is not yet set on L1. During this time, the username
-            // will be set to 0x00. In this case, return the fallback value.
-            return abi.encodePacked(fallbackValue);
+            return _formatResolvedAddr(proof.value, coinType);
         }
+        return _formatResolvedAddr(fallbackValue, coinType);
     }
 
     function supportsInterface(

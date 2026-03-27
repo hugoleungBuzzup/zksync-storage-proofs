@@ -12,13 +12,13 @@ import {
     StorageProof,
     StorageProofBatch,
     StoredBatchInfo,
-} from './types';
+} from './types.js';
 import {
     ZKSYNC_DIAMOND_INTERFACE,
     STORAGE_VERIFIER_INTERFACE,
     STORED_BATCH_INFO_ABI_STRING,
     COMMIT_BATCH_INFO_ABI_STRING,
-} from './interfaces';
+} from './interfaces.js';
 
 /** Omits batch hash from stored batch info */
 const formatStoredBatchInfo = (batchInfo: StoredBatchInfo): BatchMetadata => {
@@ -32,7 +32,12 @@ export class StorageProofProvider {
     Estimation of difference between latest L2 batch and latest verified L1
     batch. Assuming a 30 hour delay, divided to 12 minutes per block.
   */
-    readonly BLOCK_QUERY_OFFSET = 150;
+    /**
+     * When `getProof` / `getProofs` omits `batchNumber`, we use `latestL1Batch - blockQueryOffset`.
+     * Sepolia public L1 nodes often omit very recent `commitTx` from `eth_getTransactionByHash`;
+     * the exported `SepoliaStorageProofProvider` sets a larger default.
+     */
+    blockQueryOffset = 150;
 
     public diamondContract: Contract;
 
@@ -106,22 +111,46 @@ export class StorageProofProvider {
         batchNumber: number,
     ): Promise<{ commitBatchInfo: CommitBatchInfo; commitment: string }> {
         const transactionData = await this.l1Provider.getTransaction(txHash);
-        const commitBatchesSharedBridge =
-            ZKSYNC_DIAMOND_INTERFACE.decodeFunctionData(
-                'commitBatchesSharedBridge',
-                transactionData!.data,
+        if (transactionData == null) {
+            throw new Error(`Commit transaction ${txHash} not found on L1`);
+        }
+
+        const selector = transactionData.data.slice(0, 10);
+        let commitBatchInfos: any[];
+
+        if (selector === '0x701f58c5') {
+            const decoded = ZKSYNC_DIAMOND_INTERFACE.decodeFunctionData(
+                'commitBatches',
+                transactionData.data,
             );
+            commitBatchInfos = decoded[1] as any[];
+        } else if (selector === '0x98f81962') {
+            const decoded = ZKSYNC_DIAMOND_INTERFACE.decodeFunctionData(
+                'commitBatchesSharedBridge(uint256,uint256,uint256,bytes)',
+                transactionData.data,
+            );
+            const { commitBatchInfos: cbi } = this.decodeCommitData(
+                decoded[3],
+            );
+            commitBatchInfos = cbi;
+        } else if (selector === '0x0db9eb87') {
+            const decoded = ZKSYNC_DIAMOND_INTERFACE.decodeFunctionData(
+                'commitBatchesSharedBridge(address,uint256,uint256,bytes)',
+                transactionData.data,
+            );
+            const { commitBatchInfos: cbi } = this.decodeCommitData(
+                decoded[3],
+            );
+            commitBatchInfos = cbi;
+        } else {
+            throw new Error(
+                `Unsupported commit transaction selector ${selector} (tx ${txHash})`,
+            );
+        }
 
-        const [, , , commitData] = commitBatchesSharedBridge;
-
-        const { commitBatchInfos, storedBatchInfo } =
-            this.decodeCommitData(commitData);
-
-        console.log(commitBatchInfos, storedBatchInfo);
-
-        // Find the batch with matching number
-        const batch = commitBatchInfos.find((batch: any) => {
-            return batch[0] === BigInt(batchNumber);
+        const batchBn = BigInt(batchNumber);
+        const batch = commitBatchInfos.find((b: any) => {
+            return BigInt(b[0]) === batchBn;
         });
         if (batch == undefined) {
             throw new Error(`Batch ${batchNumber} not found in calldata`);
@@ -236,18 +265,46 @@ export class StorageProofProvider {
         storageKeys: Array<string>,
         batchNumber?: number,
     ): Promise<StorageProofBatch> {
-        // If batch number is not provided, get the latest batch number
-        if (batchNumber == undefined) {
+        const userPickedBatch = batchNumber !== undefined;
+        let attemptBatch = batchNumber;
+        if (attemptBatch == undefined) {
             const latestBatchNumber = await this.l2Provider.getL1BatchNumber();
-            batchNumber = latestBatchNumber - this.BLOCK_QUERY_OFFSET;
+            attemptBatch = latestBatchNumber - this.blockQueryOffset;
         }
-        const proofs = await this.getL2Proof(address, storageKeys, batchNumber);
 
-        const metadata = await this.getStoredBatchInfo(batchNumber).then(
-            formatStoredBatchInfo,
-        );
+        const maxStepBack = 80;
+        let lastError: unknown;
 
-        return { metadata, proofs };
+        for (let step = 0; step < maxStepBack; step++) {
+            try {
+                const metadata = await this.getStoredBatchInfo(attemptBatch).then(
+                    formatStoredBatchInfo,
+                );
+                const proofs = await this.getL2Proof(
+                    address,
+                    storageKeys,
+                    attemptBatch,
+                );
+                return { metadata, proofs };
+            } catch (e) {
+                lastError = e;
+                const msg = e instanceof Error ? e.message : String(e);
+                const canRetry =
+                    !userPickedBatch &&
+                    (msg.includes('not found on L1') ||
+                        (msg.includes('Transaction ') &&
+                            msg.includes('not found')));
+                if (canRetry && attemptBatch > 1) {
+                    attemptBatch -= 1;
+                    continue;
+                }
+                throw e;
+            }
+        }
+
+        throw lastError instanceof Error
+            ? lastError
+            : new Error(String(lastError));
     }
 
     /**
@@ -294,10 +351,12 @@ export const MainnetStorageProofProvider = new StorageProofProvider(
 );
 
 export const SepoliaStorageProofProvider = new StorageProofProvider(
-    new L1JsonRpcProvider('https://ethereum-sepolia.publicnode.com'),
+    new L1JsonRpcProvider('https://eth-sepolia.g.alchemy.com/v2/BViqld61MeSIZzHJG8dJc'),
     new L2Provider('https://sepolia.era.zksync.dev'),
     '0x9A6DE0f62Aa270A8bCB1e2610078650D539B1Ef9',
     '0x5490D0FE20E9F93a847c1907f7Fd2adF217bF534',
 );
+/** See `blockQueryOffset` on {@link StorageProofProvider}. */
+SepoliaStorageProofProvider.blockQueryOffset = 5200;
 
 export * from './types';

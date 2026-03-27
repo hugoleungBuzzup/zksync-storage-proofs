@@ -9,5 +9,8 @@
   },
   "devDependencies": {
     "prettier": "^3.3.3"
+  },
+  "dependencies": {
+    "viem": "^2.47.6"
   }
 }

@@ -2,6 +2,16 @@ import { Interface } from 'ethers';
 
 /** Interface of the Diamond Contract */
 export const ZKSYNC_DIAMOND_INTERFACE = new Interface([
+    `function commitBatches(
+        tuple(uint64 batchNumber, bytes32 batchHash, uint64 indexRepeatedStorageChanges, uint256 numberOfLayer1Txs, bytes32 priorityOperationsHash, bytes32 l2LogsTreeRoot, uint256 timestamp, bytes32 commitment) lastCommittedBatch,
+        tuple(uint64 batchNumber, uint64 timestamp, uint64 indexRepeatedStorageChanges, bytes32 newStateRoot, uint256 numberOfLayer1Txs, bytes32 priorityOperationsHash, bytes32 bootloaderHeapInitialContentsHash, bytes32 eventsQueueStateHash, bytes systemLogs, bytes operatorDAInput)[] newBatches
+    )`,
+    `function commitBatchesSharedBridge(
+        address _chainAddress,
+        uint256 _processBatchFrom,
+        uint256 _processBatchTo,
+        bytes calldata _commitData
+  )`,
     `function commitBatchesSharedBridge(
         uint256 _chainId,
         uint256 _processBatchFrom,

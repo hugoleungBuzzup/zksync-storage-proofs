@@ -1,7 +1,11 @@
 [profile.default]
 src = "src"
+solc = "0.8.20"
 out = "out"
 libs = ["lib"]
+evm_version = "shanghai"
+# Diamond* pull missing OZ / zksync-common paths; core storage + ENS demos compile without them.
+skip = ["src/Diamond.sol", "src/DiamondProxy.sol"]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
 optimizer = true
