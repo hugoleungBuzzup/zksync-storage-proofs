@@ -16,9 +16,14 @@ import {
 import {
     ZKSYNC_DIAMOND_INTERFACE,
     STORAGE_VERIFIER_INTERFACE,
-    STORED_BATCH_INFO_ABI_STRING,
+    STORED_BATCH_INFO_LEGACY_ABI_STRING,
+    STORED_BATCH_INFO_ENCODING_V1_ABI_STRING,
     COMMIT_BATCH_INFO_ABI_STRING,
 } from './interfaces.js';
+import {
+    parseDependencyRootsRollingHashFromSystemLogs,
+    parseL2LogsTreeRootFromSystemLogs,
+} from './systemLogs.js';
 
 /** Omits batch hash from stored batch info */
 const formatStoredBatchInfo = (batchInfo: StoredBatchInfo): BatchMetadata => {
@@ -205,7 +210,8 @@ export class StorageProofProvider {
         const { commitTxHash, proveTxHash } =
             await this.l2Provider.getL1BatchDetails(batchNumber);
 
-        // If batch is not committed or proved, return null
+        // L2 explorer may show a batch as "on L1" once committed; storage proofs need
+        // `proveTxHash` too — until the proof is executed on L1, `storedBatchHash` / SMT verify won't match.
         if (commitTxHash == undefined) {
             throw new Error(`Batch ${batchNumber} is not committed`);
         } else if (proveTxHash == undefined) {
@@ -215,7 +221,17 @@ export class StorageProofProvider {
         // Parse commit calldata from commit transaction
         const { commitBatchInfo, commitment } =
             await this.parseCommitTransaction(commitTxHash, batchNumber);
-        const l2LogsTreeRoot = await this.getL2LogsRootHash(batchNumber);
+        // `StoredBatchInfo.l2LogsTreeRoot` on L1 comes from system logs (key 0) at commit.
+        // `Diamond.l2LogsRootHash(batch)` can be zero while the committed batch used a non-zero root — must match Executor.
+        const { found: hasL2LogsRootInCommitLogs, root: l2LogsRootFromSystemLogs } =
+            parseL2LogsTreeRootFromSystemLogs(commitBatchInfo.systemLogs);
+        const l2LogsTreeRoot = hasL2LogsRootInCommitLogs
+            ? l2LogsRootFromSystemLogs
+            : await this.getL2LogsRootHash(batchNumber);
+        const dependencyRootsRollingHash =
+            parseDependencyRootsRollingHashFromSystemLogs(
+                commitBatchInfo.systemLogs,
+            );
 
         const storedBatchInfo: StoredBatchInfo = {
             batchNumber: commitBatchInfo.batchNumber,
@@ -224,6 +240,7 @@ export class StorageProofProvider {
                 commitBatchInfo.indexRepeatedStorageChanges,
             numberOfLayer1Txs: commitBatchInfo.numberOfLayer1Txs,
             priorityOperationsHash: commitBatchInfo.priorityOperationsHash,
+            dependencyRootsRollingHash,
             l2LogsTreeRoot,
             timestamp: commitBatchInfo.timestamp,
             commitment,
@@ -255,21 +272,40 @@ export class StorageProofProvider {
 
     /**
      * Gets the proof and related data for the given batch number, address and storage keys.
-     * @param address
-     * @param storageKeys
-     * @param batchNumber
-     * @returns
+     * @param batchNumber - If set, use this batch (disables auto step-back).
+     * @param options - `minBatchNumber`: auto mode; start at `max(latest - offset, minBatchNumber)`; step-back never goes below floor.
      */
     async getProofs(
         address: string,
         storageKeys: Array<string>,
         batchNumber?: number,
+        options?: { minBatchNumber?: number },
     ): Promise<StorageProofBatch> {
         const userPickedBatch = batchNumber !== undefined;
-        let attemptBatch = batchNumber;
-        if (attemptBatch == undefined) {
+        const floor =
+            options?.minBatchNumber !== undefined
+                ? Math.max(0, Math.trunc(options.minBatchNumber))
+                : undefined;
+
+        if (
+            userPickedBatch &&
+            floor !== undefined &&
+            batchNumber! < floor
+        ) {
+            throw new Error(
+                `batchNumber ${batchNumber} is below minBatchNumber ${floor}`,
+            );
+        }
+
+        let attemptBatch: number;
+        if (batchNumber !== undefined) {
+            attemptBatch = batchNumber;
+        } else {
             const latestBatchNumber = await this.l2Provider.getL1BatchNumber();
             attemptBatch = latestBatchNumber - this.blockQueryOffset;
+            if (floor !== undefined) {
+                attemptBatch = Math.max(attemptBatch, floor);
+            }
         }
 
         const maxStepBack = 80;
@@ -289,13 +325,22 @@ export class StorageProofProvider {
             } catch (e) {
                 lastError = e;
                 const msg = e instanceof Error ? e.message : String(e);
+                const m = msg.toLowerCase();
                 const canRetry =
                     !userPickedBatch &&
-                    (msg.includes('not found on L1') ||
-                        (msg.includes('Transaction ') &&
-                            msg.includes('not found')));
+                    (m.includes('not found on l1') ||
+                        (m.includes('transaction ') &&
+                            m.includes('not found')) ||
+                        m.includes('not proved') ||
+                        m.includes('not committed'));
                 if (canRetry && attemptBatch > 1) {
-                    attemptBatch -= 1;
+                    const nextBatch = attemptBatch - 1;
+                    if (floor !== undefined && nextBatch < floor) {
+                        throw lastError instanceof Error
+                            ? lastError
+                            : new Error(String(lastError));
+                    }
+                    attemptBatch = nextBatch;
                     continue;
                 }
                 throw e;
@@ -312,35 +357,66 @@ export class StorageProofProvider {
      * @param address
      * @param storageKey
      * @param batchNumber
+     * @param options - see {@link getProofs}
      * @returns
      */
     async getProof(
         address: string,
         storageKey: string,
         batchNumber?: number,
+        options?: { minBatchNumber?: number },
     ): Promise<StorageProof> {
         const { metadata, proofs } = await this.getProofs(
             address,
             [storageKey],
             batchNumber,
+            options,
         );
         return { metadata, ...proofs[0] };
     }
 
+    /**
+     * Decodes `commitBatchesSharedBridge` `_commitData` per matter-labs `BatchDecoder`:
+     * first byte = encoding version, remainder = `abi.encode(StoredBatchInfo, CommitBatchInfo[])`.
+     * Version `0` = legacy stored batch (no `dependencyRootsRollingHash`); version `1` = current layout.
+     */
     decodeCommitData(commitData: string) {
-        // Remove the version prefix (0x00)
-        const encodedDataWithoutVersion = commitData.slice(4);
+        if (!commitData.startsWith('0x') || commitData.length < 6) {
+            throw new Error('Invalid commitData: expected 0x-prefixed hex with version byte');
+        }
+        const version = parseInt(commitData.slice(2, 4), 16);
+        const encodedBody = commitData.slice(4);
+        const payload = encodedBody.startsWith('0x')
+            ? encodedBody
+            : `0x${encodedBody}`;
 
-        // Decode the data
-        const decoded = AbiCoder.defaultAbiCoder().decode(
-            [STORED_BATCH_INFO_ABI_STRING, `${COMMIT_BATCH_INFO_ABI_STRING}[]`],
-            '0x' + encodedDataWithoutVersion,
+        const pairLegacy = [
+            STORED_BATCH_INFO_LEGACY_ABI_STRING,
+            `${COMMIT_BATCH_INFO_ABI_STRING}[]`,
+        ] as const;
+        const pairV1 = [
+            STORED_BATCH_INFO_ENCODING_V1_ABI_STRING,
+            `${COMMIT_BATCH_INFO_ABI_STRING}[]`,
+        ] as const;
+
+        if (version === 0) {
+            const decoded = AbiCoder.defaultAbiCoder().decode(pairLegacy, payload);
+            return {
+                storedBatchInfo: decoded[0],
+                commitBatchInfos: decoded[1],
+            };
+        }
+        if (version === 1) {
+            const decoded = AbiCoder.defaultAbiCoder().decode(pairV1, payload);
+            return {
+                storedBatchInfo: decoded[0],
+                commitBatchInfos: decoded[1],
+            };
+        }
+
+        throw new Error(
+            `Unsupported commit batch encoding version ${version} (supported: 0 = legacy StoredBatchInfo, 1 = StoredBatchInfo with dependencyRootsRollingHash)`,
         );
-
-        return {
-            storedBatchInfo: decoded[0],
-            commitBatchInfos: decoded[1],
-        };
     }
 }
 
@@ -360,3 +436,4 @@ export const SepoliaStorageProofProvider = new StorageProofProvider(
 SepoliaStorageProofProvider.blockQueryOffset = 5200;
 
 export * from './types';
+export * from './systemLogs';

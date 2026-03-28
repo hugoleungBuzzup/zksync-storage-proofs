@@ -1,10 +1,10 @@
 export PRIVATE_KEY="你的私鑰(不要0x)"
-export RPC_URL="https://eth-sepolia.g.alchemy.com/v2/BViqld61MeSIZzHJG8dJc"
-
+#export RPC_URL="https://eth-sepolia.g.alchemy.com/v2/BViqld61MeSIZzHJG8dJc"
+export RPC_URL="https://eth-mainnet.g.alchemy.com/v2/BViqld61MeSIZzHJG8dJc"
 export ETHERSCAN_API_KEY="SJX2SU7E95WHJP2GC7WBP3RF2BPHDAGRGZ"
 
 # root folder = packages/zksync-storage-contracts
-
+# solc version = 0.8.13
 #create contract social recovery
 forge create --broadcast src/SparseMerkleTree.sol:SparseMerkleTree \
  --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY"
@@ -22,6 +22,12 @@ forge create --broadcast src/StorageProofVerifier.sol:StorageProofVerifier \
   --private-key "$PRIVATE_KEY" \
   --constructor-args "0x9A6DE0f62Aa270A8bCB1e2610078650D539B1Ef9" "0xA568BF11bcAA9441c246B81b8fb5C0c3b6B8A97b"
 
+##mainnet
+forge create --broadcast src/StorageProofVerifier.sol:StorageProofVerifier \
+  --rpc-url "$RPC_URL" \
+  --private-key "$PRIVATE_KEY" \
+  --constructor-args "0x32400084C286CF3E17e7B677ea9583e60a000324" "0x2e21a15c29bA5b8b076cE5D3241BE226FB395273"
+
 #build json file for StorageProofVerifier
 forge verify-contract --show-standard-json-input \
   0x0000000000000000000000000000000000000000 \
@@ -31,3 +37,7 @@ forge verify-contract --show-standard-json-input \
 CONSTRUCTOR_ARGS=$(cast abi-encode "constructor(address,address)" \
   0x9A6DE0f62Aa270A8bCB1e2610078650D539B1Ef9 \
   0xA568BF11bcAA9441c246B81b8fb5C0c3b6B8A97b)
+
+  CONSTRUCTOR_ARGS=$(cast abi-encode "constructor(address,address)" \
+  0x32400084C286CF3E17e7B677ea9583e60a000324 \
+  0x2e21a15c29bA5b8b076cE5D3241BE226FB395273)

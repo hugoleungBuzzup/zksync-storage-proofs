@@ -5,6 +5,8 @@ export interface StoredBatchInfo {
     indexRepeatedStorageChanges: bigint;
     numberOfLayer1Txs: bigint;
     priorityOperationsHash: string;
+    /** matter-labs `IExecutor.StoredBatchInfo.dependencyRootsRollingHash` (from L2 system logs). */
+    dependencyRootsRollingHash: string;
     l2LogsTreeRoot: string;
     timestamp: bigint;
     commitment: string;
@@ -23,7 +25,8 @@ export interface CommitBatchInfo {
     priorityOperationsHash: string;
     bootloaderHeapInitialContentsHash: string;
     eventsQueueStateHash: string;
-    systemLogs: string;
+    /** ABI `bytes`; ethers may return hex `string` or `Uint8Array`. */
+    systemLogs: string | Uint8Array;
     totalL2ToL1Pubdata: Uint8Array;
 }
 

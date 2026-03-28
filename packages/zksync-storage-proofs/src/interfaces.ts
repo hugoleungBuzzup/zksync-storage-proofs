@@ -29,6 +29,7 @@ export const STORAGE_VERIFIER_INTERFACE = new Interface([
            uint64 indexRepeatedStorageChanges,
            uint256 numberOfLayer1Txs,
            bytes32 priorityOperationsHash,
+           bytes32 dependencyRootsRollingHash,
            bytes32 l2LogsTreeRoot,
            uint256 timestamp,
            bytes32 commitment ) metadata,
@@ -40,7 +41,18 @@ export const STORAGE_VERIFIER_INTERFACE = new Interface([
     ) view returns (bool)`,
 ]);
 
-export const STORED_BATCH_INFO_ABI_STRING =
+/** Legacy `IExecutor.LegacyStoredBatchInfo` (encoding version byte `0x00`). */
+export const STORED_BATCH_INFO_LEGACY_ABI_STRING =
     'tuple(uint64 batchNumber, bytes32 batchHash, uint64 indexRepeatedStorageChanges, uint256 numberOfLayer1Txs, bytes32 priorityOperationsHash, bytes32 l2LogsTreeRoot, uint256 timestamp, bytes32 commitment)';
+
+/**
+ * Current `IExecutor.StoredBatchInfo` with `dependencyRootsRollingHash`
+ * (matter-labs `BatchDecoder` encoding version `0x01`).
+ */
+export const STORED_BATCH_INFO_ENCODING_V1_ABI_STRING =
+    'tuple(uint64 batchNumber, bytes32 batchHash, uint64 indexRepeatedStorageChanges, uint256 numberOfLayer1Txs, bytes32 priorityOperationsHash, bytes32 dependencyRootsRollingHash, bytes32 l2LogsTreeRoot, uint256 timestamp, bytes32 commitment)';
+
+/** @deprecated Use {@link STORED_BATCH_INFO_LEGACY_ABI_STRING} or {@link STORED_BATCH_INFO_ENCODING_V1_ABI_STRING}. */
+export const STORED_BATCH_INFO_ABI_STRING = STORED_BATCH_INFO_LEGACY_ABI_STRING;
 export const COMMIT_BATCH_INFO_ABI_STRING =
     'tuple(uint64 batchNumber, uint64 timestamp, uint64 indexRepeatedStorageChanges, bytes32 newStateRoot, uint256 numberOfLayer1Txs, bytes32 priorityOperationsHash, bytes32 bootloaderHeapInitialContentsHash, bytes32 eventsQueueStateHash, bytes systemLogs, bytes operatorDAInput)';

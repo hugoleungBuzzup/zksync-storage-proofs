@@ -1,10 +1,10 @@
 
-#SparseMerkleTree at L1 sepolia
-0xA568BF11bcAA9441c246B81b8fb5C0c3b6B8A97b
+#SparseMerkleTree at L1 mainnet
+0x2e21a15c29bA5b8b076cE5D3241BE226FB395273
 
-#StorageProofVerifier at L1 sepolia
-#constructor( 0x9A6DE0f62Aa270A8bCB1e2610078650D539B1Ef9 , SparseMerkleTree )
-0xf08d17d547C752187D3E13efD4E2F1ED778d696a
+#StorageProofVerifier at L1 mainnet
+#constructor( 0x32400084C286CF3E17e7B677ea9583e60a000324 , SparseMerkleTree )
+0x0AaA65f3E2F0235693c892f544AC949f767752A6
 
 #src/ens/MultichainNameRegistry.sol:MultichainNameRegistry | at L2 zkSync Sepolia
 0x802be667439aB31d9d914B76c6Ab14F6962FEbf9
@@ -12,14 +12,14 @@
 MultichainNameRegistry.t.sol passed
 SparseMerkleTree.t.sol passed
 
-# resolver | sepolia 
-0xEb23b35fF677E77Adcc01aA50E28B4e640c3Add8
+# resolver | mainnet 
+0xD93dD63bDb22c1c2dD312cD20DF39045bc8bE24c
 
-# ENS | sepolia 
-https://sepolia.etherscan.io/nft/0xf332544e6234f1ca149907d0d4658afd5feb6831/60420026674039547457848773631412306910235558731207726443078870022444829114368
+# at scan > resolver contract , set _mappingSlot of MultichainNameRegistry = 0 .
+# ENS | mainnet 
 
 
-#### Step 2 call by cmdResolveProbe : node scripts/clave-ccip-bridge.cjs resolve-probe 0xEb23b35fF677E77Adcc01aA50E28B4e640c3Add8 hugol.anchort.eth https://eth-sepolia.g.alchemy.com/v2/BViqld61MeSIZzHJG8dJc 2147492101 
+#### Step 2 call by cmdResolveProbe : node scripts/clave-ccip-bridge.cjs resolve-probe 0xD93dD63bDb22c1c2dD312cD20DF39045bc8bE24c hugol.anchort.eth https://lb.drpc.live/ethereum/AusOX53U-01GieqQPoikUr_ciJabKf4R8Z05vjPxm9H3 2147492101 
 #call at command
 cast calldata "resolve(bytes,bytes)" 0x056875676f6c07616e63686f72740365746800 0x3b3b57de3cc796e4b8f71eb5cf91aeea0d19caa12e219da1deb6a47f47067c26fdcfdbff
 
@@ -33,7 +33,8 @@ at ../result/decode-error_result.txt
 #use the return to call gateway to run node scripts/clave-ccip-bridge.cjs decode gw-response.hex
 OK: valid ABI (StorageProof, bytes32) for resolveWithProof
 
-# --- 步驟 3：鏈上驗證（decode 成功 ≠ verify 一定過）---
+# --- 步驟 3：鏈上驗證（decode 成功 ≠ verify 一定過）--- ( resolve-verify / cmdResolveVerify )
+#
 # 從步驟 1 `cast decode-error ... OffchainLookup` 取出第五個欄位 `extraData`（hex）。
 # `extraData` = abi.encode(registry, storageKey, coinType)，同 gateway 無關，必須同一次 resolve revert 配對。
 # `RESPONSE` = gateway 回傳嘅完整 0x...（即 decode 用嗰串）。

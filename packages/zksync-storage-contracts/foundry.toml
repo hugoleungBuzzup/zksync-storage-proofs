@@ -10,3 +10,5 @@ skip = ["src/Diamond.sol", "src/DiamondProxy.sol"]
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
 optimizer = true
 optimizer_runs = 1000000
+
+

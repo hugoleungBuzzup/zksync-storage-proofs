@@ -1,0 +1,89 @@
+{
+  "extraData": {
+    "registry": "0x802be667439aB31d9d914B76c6Ab14F6962FEbf9",
+    "storageKey": "92287908890597627164938231063558466194272934017698961062553847540074891785830",
+    "storageKeyHex": "0xcc091af8e92d844ab47df58e29d66899c9784a27faef61034d1e0859db993666",
+    "coinType": "2147492101"
+  },
+  "proof": {
+    "metadata": {
+      "batchNumber": "508666",
+      "indexRepeatedStorageChanges": "384709184",
+      "numberOfLayer1Txs": "1",
+      "priorityOperationsHash": "0xe8af8487738ff78af73add6884f4a3f13881dd8da6f26ebc9cbb70f4a9751bda",
+      "dependencyRootsRollingHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "l2LogsTreeRoot": "0x3c62740cac16b76bc983f20f75e2b505b5d354d42daafaa4bd3232841373ada2",
+      "timestamp": "1774685520",
+      "commitment": "0x36a95ea23bec855e048d933a478d50a39651477f84a5d71b6b4b4292117cc10a"
+    },
+    "account": "0x802be667439aB31d9d914B76c6Ab14F6962FEbf9",
+    "key": "92287908890597627164938231063558466194272934017698961062553847540074891785830",
+    "value": "0x0000000000000000000000009ebf11b791856d0fc8615f80ce71989654b4f86e",
+    "path": [
+      "0x92db4e525d3471edcf605bed678b7fb9e69b7ecb79cbf123ea503ca38a3b581b",
+      "0x791d17b3cfe5ee9c62ef2fbb98a69106504fd8d6aa0f2c0dfce4dd65dd379a6d",
+      "0x89d9fb12de4ec6015bdbb622cc282da01f9f39d890e582d6742d163d4e81ba61",
+      "0x68613c20119bb4e2bbc4422eae89c16a09cbc1d11f8bc8726245acd030834419",
+      "0x3e87f2c723e19750b6bad5d24437b280c57377a1a49333a9e7d97ed15eacd0c6",
+      "0x41c846470142683245fe58a5b03f4e7fa1d67bb72331f8f2437f4a9600fbb1ae",
+      "0x16fce56f9dce8dd2e7e9f030980a2f256b552e791f06a4ffe64e629f65f9e25d",
+      "0x17137d1247406814f1473f0aaf4839e1f2a05ba01a183c1979d015c1d705b496",
+      "0x72707622740fe271a1092753fbb54dd2c16f7d6e5aa9294919c23a0bdc2610a7",
+      "0x9fe202e22de101602331bc960fe9875200f1132f5b9ac7c52fcc8bdb9a6b08a1",
+      "0x123f29bd5976bf36a1d5fa3ccf774f6f838df08567f1779a36f441a2ccf4adc5",
+      "0x5e24ebd1bae4faec3074a2878f22bf4135d65a4f803bc39efc39d95532092610",
+      "0xf93cd5bc681b98c7615a048d82b60a3b205824625fd43fbf97435bf9a4cdf9bf",
+      "0xf1e4eb1e3b9eb43cd5b3648dd8bf51ae11bef8a64701766129c3b72c1f5ae372",
+      "0x5f2b45d4588ad32f49935b1db1adef9653a8dae442a81b992aca5677630872a7",
+      "0xf06c23797c5af4e69a3afed423527f9826bf44a18b21334158d3949e0a3e258e",
+      "0x203b85896afefb578cfeb0c76f963f345cc8c43e82a20890d25e36b36dcf69ae",
+      "0x10be2834df142eb9b0e7c4d0d13c21c2891a67bb4ebd2eae5a6c35104769c237",
+      "0x5af3eff88740c0f79f2fd28a3239c636896d72ea8b7d5c2bea3b29fa02051580",
+      "0x5b7ed057fe2da07c2d5fb2922ad7579f28acee31f0195871f995ea11c0ff7231",
+      "0xd0d3524543ac4b8a84e556672ef96211ee9e3487d364fbdf889824319b98abed",
+      "0x74254bb426ecb370b6abaa29047510b146841aadcad392255bb00680321daf3a",
+      "0x714b81e9dfc8f3bcb35399a2f073676e4fa501ec00fbb304012d135721f43d41",
+      "0x8f7a6041e7fe406b5293e7400cdce96843dbf275d24b93149fa8c817d346f6db",
+      "0xe5f71cb85340947638d1e6a2526d7d2f58f9e12105b52d744f68f58fbff6a606",
+      "0x4516cd371b1a1814e659da47a5ec1e26b5c2000a08f32ef9a05d90938664dd3c",
+      "0x463486213bba75f3a20fd154ae3038ae5ef8ea7f3b94337e8fa7a9be2fe88336",
+      "0x02cf10c987a462f4122ed73accfdcac704b817be71699c0f28442dc0a3cfeffd",
+      "0xffd2e039a32b9e8fac6b9c0e203a6871922b8e8fc97f8729eeadaf52397286be",
+      "0xe45736ef3c776c0b9845e8e98e54eac2211f20e32ebcc6622b99b96f456deec5"
+    ],
+    "index": "384703613"
+  },
+  "fallback": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "flags": {
+    "proofKeyMatchesExtraData": true,
+    "proofAccountMatchesExtraRegistry": true,
+    "proofValueIsZero": false,
+    "fallbackIsZero": true
+  },
+  "suggestedCastCommands": [
+    "cast storage 0x802be667439aB31d9d914B76c6Ab14F6962FEbf9 0xcc091af8e92d844ab47df58e29d66899c9784a27faef61034d1e0859db993666 --rpc-url \"<L2_ZKSYNC_SEPOLIA_RPC>\""
+  ],
+  "hints": {
+    "zeroAddressResolve": "若步驟 3 returnData 解出 20-byte 全零：多數係 proof.value 與 fallback 皆 0，或 verify 回 false 仍走 fallback。",
+    "keyMismatch": "若 proofKeyMatchesExtraData 為 false：gateway proof 嘅 key 與 extraData 唔一致，resolveWithProof 鏈上會用 extraData 覆寫 key。",
+    "l2Compare": "l2.getStorageAt 應與 proof.value 一致（同一 batch / 狀態下）；唔一致即 proof 過期或 slot 錯。"
+  },
+  "l2": {
+    "getStorageAt": "0x0000000000000000000000009ebf11b791856d0fc8615f80ce71989654b4f86e",
+    "matchesProofValue": true
+  },
+  "l1Verifier": {
+    "address": "0x0AaA65f3E2F0235693c892f544AC949f767752A6",
+    "zksyncDiamondAddress": "0x32400084C286CF3E17e7B677ea9583e60a000324",
+    "smtAddress": "0x2e21a15c29bA5b8b076cE5D3241BE226FB395273"
+  },
+  "l1Verify": {
+    "verifyReturned": true
+  },
+  "l1VerifyDebug": null
+}
+OK: 見 flags（proofValueIsZero / fallbackIsZero）、suggestedCastCommands；有俾 RPC 則睇 l2 / l1Verifier / l1Verify。
+[resolve-diagnose] L1 StorageProofVerifier 綁定：
+  verifierAddress: 0x0AaA65f3E2F0235693c892f544AC949f767752A6
+  zksyncDiamondAddress: 0x32400084C286CF3E17e7B677ea9583e60a000324
+  smt (SparseMerkleTree): 0x2e21a15c29bA5b8b076cE5D3241BE226FB395273
